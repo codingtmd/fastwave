@@ -1,3 +1,9 @@
+#I didn't do anything, just try to format the code to fast the batching.
+
+> go run wave.go -w 20 "(0xTelept)" 
+
+
+
 # Vanity Arweave Wallet Generator
 
 > _W.A.V.E_, if you squint your eyes hard enough

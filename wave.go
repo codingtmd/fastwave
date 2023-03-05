@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	// Third Party
 	"github.com/alexflint/go-arg"
@@ -86,8 +87,8 @@ func main() {
 func worker(workerId int, pattern string, walletChan chan<- Wallet) {
 	for {
 		// Generate wallet
-		wallet := GenerateWallet()
-		walletAddress := wallet.address
+		rsaKey := GenKeyPair(workerId)
+		walletAddress := GenAddress(rsaKey.N.Bytes())
 
 		// check if wallet address matches the provided pattern
 		match, err := regexp.MatchString(pattern, walletAddress)
@@ -97,6 +98,8 @@ func worker(workerId int, pattern string, walletChan chan<- Wallet) {
 
 		// send wallet to main if matched
 		if match {
+			wallet := GenWalletFromKey(workerId, rsaKey)
+			wallet.address = walletAddress
 			walletChan <- wallet
 			break
 		}
@@ -108,11 +111,32 @@ type Wallet struct {
 	key     *gojwk.Key
 }
 
-func GenerateWallet() Wallet {
+func GenKeyPair(workerId int) *rsa.PrivateKey {
+	start := time.Now()
+
 	// generate an RSA key
 	reader := rand.Reader
 	rsaKey, err := rsa.GenerateKey(reader, 4096)
 	errcheck(err)
+
+	fmt.Printf("[WORKER%v] GenKeyPair took %v\n", workerId, time.Since(start))
+
+	return rsaKey
+}
+
+func GenAddress(nPart []byte) string {
+	//start := time.Now()
+
+	h := sha256.New()
+	h.Write(nPart)                                              // Take the "n", in bytes and hash it using SHA256
+	address := base64.RawURLEncoding.EncodeToString(h.Sum(nil)) // Then base64url encode it to get the wallet address
+
+	//fmt.Printf("GenAddress took %v\n", time.Since(start))
+	return address
+}
+
+func GenWalletFromKey(workerId int, rsaKey *rsa.PrivateKey) Wallet {
+	start := time.Now()
 
 	// create new wallet instance
 	wallet := Wallet{}
@@ -125,12 +149,9 @@ func GenerateWallet() Wallet {
 		E:   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(rsaKey.E)).Bytes()), // public key exponent
 	}
 
-	// Generate wallet address
-	h := sha256.New()
-	h.Write(rsaKey.N.Bytes())                                         // Take the "n", in bytes and hash it using SHA256
-	wallet.address = base64.RawURLEncoding.EncodeToString(h.Sum(nil)) // Then base64url encode it to get the wallet address
-
+	fmt.Printf("[WORKER%v] GenWalletFromKey took %v\n", workerId, time.Since(start))
 	return wallet
+
 }
 
 func errcheck(e error) {
